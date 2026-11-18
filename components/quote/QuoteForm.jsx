@@ -14,12 +14,13 @@ import {
 import { QUOTE_STORAGE_KEY } from '@/lib/quoteStorage'
 import { isDisposableEmail, sanitizePhoneInput, validateEmail, validatePhone } from '@/lib/validationRules'
 import { occasions } from '@/data/occasions'
+import FillButton from '@/components/Common/FillButton'
 import AirportInput from './AirportInput'
 import FlightDatePicker from './FlightDatePicker'
 
 const CABINS = ['Economy', 'Premium Economy', 'Business', 'First Class']
 const menuBtn =
-  'inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold text-ink-700 transition hover:bg-white'
+  'inline-flex cursor-pointer items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-sm font-semibold text-ink-700 transition'
 
 function todayLocalISO() {
   const n = new Date()
@@ -530,14 +531,15 @@ function QuoteFormInner({ compact = false, defaultOccasion = '' }) {
           </div>
 
           <div className="flex items-end">
-            <button
+            <FillButton
               type="submit"
               disabled={loading}
-              className="group inline-flex h-[52px] w-full items-center justify-center gap-2 rounded-2xl bg-ember-600 px-6 text-sm font-bold text-white shadow-lg shadow-ember-600/25 transition hover:bg-ember-700 focus:outline-none focus:ring-4 focus:ring-ember-500/25 disabled:opacity-70 lg:min-w-[160px]"
+              variant="invert"
+              className="group inline-flex h-[52px] w-full items-center justify-center rounded-2xl bg-ember-600 px-6 text-sm font-bold text-white shadow-lg shadow-ember-600/25 focus:outline-none focus:ring-4 focus:ring-ember-500/25 disabled:opacity-70 lg:min-w-[160px]"
             >
               {loading ? 'Sending...' : 'Get free quote'}
               <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
-            </button>
+            </FillButton>
           </div>
         </div>
 

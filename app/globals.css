@@ -1,29 +1,36 @@
 @import "tailwindcss";
 
 @theme {
-  --font-display: "Syne", ui-sans-serif, system-ui, sans-serif;
-  --font-sans: "Manrope", ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-archivo), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-source-sans), ui-sans-serif, system-ui, sans-serif;
 
-  --color-ink-50: #f4f7fb;
-  --color-ink-100: #e6edf6;
-  --color-ink-200: #c9d7e8;
-  --color-ink-300: #9bb3cf;
-  --color-ink-400: #6a89b0;
-  --color-ink-500: #4a6b94;
-  --color-ink-600: #355378;
-  --color-ink-700: #2a4260;
+  /* Ground / ink — departure-desk navy from brand */
+  --color-ink-50: #f3f6f9;
+  --color-ink-100: #e5ebf2;
+  --color-ink-200: #c7d2e0;
+  --color-ink-300: #9aadc4;
+  --color-ink-400: #6b849f;
+  --color-ink-500: #4d6784;
+  --color-ink-600: #3a516a;
+  --color-ink-700: #2e4156;
   --color-ink-800: #1f3148;
-  --color-ink-900: #152233;
-  --color-ink-950: #0b1522;
+  --color-ink-900: #142033;
+  --color-ink-950: #0a1320;
 
-  --color-skyline-400: #38bdf8;
-  --color-skyline-500: #0ea5e9;
-  --color-skyline-600: #0284c7;
-  --color-skyline-700: #0369a1;
+  /* Route copper — logo orange, CTA only */
+  --color-ember-500: #e67a22;
+  --color-ember-600: #d46612;
+  --color-ember-700: #b3530e;
 
-  --color-ember-500: #f97316;
-  --color-ember-600: #ea580c;
-  --color-ember-700: #c2410c;
+  /* Quiet sky — secondary links only */
+  --color-skyline-300: #7eb8d9;
+  --color-skyline-400: #4f98c4;
+  --color-skyline-500: #2f7aab;
+  --color-skyline-600: #24628a;
+  --color-skyline-700: #1d4f70;
+
+  --color-paper: #f7f9fb;
+  --color-line: #d8e0ea;
 }
 
 html {
@@ -33,15 +40,227 @@ html {
 body {
   font-family: var(--font-sans);
   color: var(--color-ink-900);
-  background: #f7fafc;
+  background: var(--color-paper);
 }
 
 .font-display {
   font-family: var(--font-display);
 }
 
+@keyframes marquee-scroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.testimonials-marquee-fade {
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 8%, #000 92%, transparent);
+  mask-image: linear-gradient(to right, transparent, #000 8%, #000 92%, transparent);
+}
+
+.testimonials-marquee-track {
+  width: max-content;
+  will-change: transform;
+  animation: marquee-scroll var(--marquee-duration, 40s) linear infinite;
+}
+
+.testimonials-marquee-track--reverse {
+  animation-direction: reverse;
+}
+
+.testimonials-marquee:hover .testimonials-marquee-track,
+.testimonials-marquee:focus-within .testimonials-marquee-track,
+.testimonials-marquee:active .testimonials-marquee-track {
+  animation-play-state: paused;
+}
+
+.about-story-word.is-lit {
+  color: var(--color-ink-900);
+}
+
+.about-story-word.is-navy {
+  color: #00338d;
+}
+
+@keyframes route-dash {
+  to {
+    stroke-dashoffset: -20;
+  }
+}
+
+.route-arc {
+  animation: route-dash 2s linear infinite;
+}
+
+.gfb-pass {
+  --stub: 210px;
+  --r: 15px;
+  display: grid;
+  grid-template-columns: 1fr var(--stub);
+  -webkit-mask:
+    radial-gradient(circle var(--r) at calc(100% - var(--stub)) 0, #0000 98%, #000),
+    radial-gradient(circle var(--r) at calc(100% - var(--stub)) 100%, #0000 98%, #000);
+  -webkit-mask-composite: source-in;
+  mask:
+    radial-gradient(circle var(--r) at calc(100% - var(--stub)) 0, #0000 98%, #000),
+    radial-gradient(circle var(--r) at calc(100% - var(--stub)) 100%, #0000 98%, #000);
+  mask-composite: intersect;
+}
+
+/* Shadow on its own layer: an outer box-shadow is never painted inside the box,
+   so the masked notches stay clean (no drop-shadow filter on the wrapper). */
+.gfb-pass-shadow {
+  position: absolute;
+  inset: 0;
+  border-radius: 22px;
+  box-shadow: 0 34px 46px -16px rgba(0, 51, 141, 0.45);
+}
+
+@media (max-width: 719px) {
+  .gfb-pass-shadow {
+    border-radius: 18px;
+  }
+}
+
+.gfb-pass-stub {
+  border-left: 1px dashed #c7d2e0;
+}
+
+.gfb-pass .lane {
+  position: relative;
+  flex: 1 1 0%;
+  min-width: 0;
+  height: 0;
+  border-top: 2px dashed #c9d4e2;
+  container-type: inline-size;
+}
+
+.gfb-pass .trail {
+  position: absolute;
+  left: 0;
+  top: -2px;
+  height: 2px;
+  width: 0;
+  background: linear-gradient(90deg, transparent, #ea580c);
+  animation: gfb-trail 5s linear infinite;
+}
+
+.gfb-pass .pn {
+  position: absolute;
+  left: 0;
+  top: -1px;
+  width: 30px;
+  height: 30px;
+  margin-left: -15px;
+  will-change: transform;
+  animation: gfb-fly 5s linear infinite;
+}
+
+@keyframes gfb-fly {
+  0% {
+    transform: translate(0cqw, -50%) rotate(-14deg);
+    opacity: 0;
+  }
+  6% {
+    opacity: 1;
+  }
+  25% {
+    transform: translate(25cqw, calc(-50% - 12px)) rotate(-7deg);
+  }
+  50% {
+    transform: translate(50cqw, calc(-50% - 16px)) rotate(0deg);
+  }
+  75% {
+    transform: translate(75cqw, calc(-50% - 12px)) rotate(7deg);
+  }
+  92% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(100cqw, -50%) rotate(14deg);
+    opacity: 0;
+  }
+}
+
+@keyframes gfb-trail {
+  0% {
+    width: 0;
+    opacity: 1;
+  }
+  92% {
+    opacity: 1;
+  }
+  100% {
+    width: 100%;
+    opacity: 0;
+  }
+}
+
+@media (max-width: 719px) {
+  .gfb-pass {
+    grid-template-columns: 1fr;
+    -webkit-mask: none;
+    mask: none;
+  }
+
+  .gfb-pass-stub {
+    border-left: 0;
+    border-top: 1px dashed #c7d2e0;
+  }
+}
+
+@keyframes about-runway-line {
+  to {
+    background-position: 24px 0;
+  }
+}
+
+.about-runway-line {
+  background-image: repeating-linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.55) 0 12px,
+    transparent 12px 24px
+  );
+  background-size: 24px 2px;
+  animation: about-runway-line 1s linear infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
+  }
+
+  .testimonials-marquee-track {
+    display: none;
+    animation: none;
+  }
+
+  .testimonials-marquee-static {
+    display: flex !important;
+  }
+
+  .testimonials-marquee-fade {
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+
+  .route-arc,
+  .about-runway-line {
+    animation: none !important;
+  }
+
+  .gfb-pass .pn {
+    animation: none !important;
+    transform: translate(50cqw, -50%);
+    opacity: 1;
+  }
+
+  .gfb-pass .trail {
+    animation: none !important;
+    width: 50%;
+    opacity: 1;
   }
 }

@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
 import { ArrowLeft, CheckCircle2 } from 'lucide-react'
 import { QUOTE_STORAGE_KEY } from '@/lib/quoteStorage'
+import FillButton from '@/components/Common/FillButton'
 
 export default function QuoteConfirmation() {
   const router = useRouter()
@@ -30,9 +30,13 @@ export default function QuoteConfirmation() {
         <div className="max-w-md rounded-[28px] border border-ink-100 bg-white p-8 text-center shadow-xl">
           <h1 className="font-display text-2xl font-bold text-ink-900">No quote data found</h1>
           <p className="mt-3 text-sm text-ink-500">Start a new group quote from the homepage.</p>
-          <Link href="/" className="mt-6 inline-flex items-center gap-2 rounded-full bg-ink-900 px-5 py-2.5 text-sm font-bold text-white">
+          <FillButton
+            href="/"
+            variant="invert"
+            className="mt-6 inline-flex items-center rounded-full bg-ink-900 px-5 py-2.5 text-sm font-bold text-white"
+          >
             <ArrowLeft className="h-4 w-4" /> Back to home
-          </Link>
+          </FillButton>
         </div>
       </div>
     )
@@ -78,19 +82,23 @@ export default function QuoteConfirmation() {
         </dl>
 
         <div className="mt-8 flex flex-wrap gap-3">
-          <button
+          <FillButton
             type="button"
+            variant="invert"
             onClick={() => {
               sessionStorage.removeItem(QUOTE_STORAGE_KEY)
               router.push('/')
             }}
-            className="inline-flex items-center gap-2 rounded-full bg-ink-900 px-5 py-2.5 text-sm font-bold text-white"
+            className="inline-flex items-center rounded-full bg-ink-900 px-5 py-2.5 text-sm font-bold text-white"
           >
             <ArrowLeft className="h-4 w-4" /> New quote
-          </button>
-          <Link href="/occasions" className="inline-flex items-center rounded-full border border-ink-200 px-5 py-2.5 text-sm font-bold text-ink-800 hover:bg-ink-50">
+          </FillButton>
+          <FillButton
+            href="/occasions"
+            className="inline-flex items-center rounded-full border border-ink-200 px-5 py-2.5 text-sm font-bold text-ink-800"
+          >
             Browse occasions
-          </Link>
+          </FillButton>
         </div>
       </div>
     </div>

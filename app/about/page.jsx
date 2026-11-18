@@ -1,9 +1,10 @@
 import AboutPage from '@/components/About/AboutPage'
 import { createPageMetadata } from '@/lib/seo'
+import { aboutMeta } from '@/lib/aboutContent'
 
 export const metadata = createPageMetadata({
-  title: 'About',
-  description: 'Learn how Group Flight Bookings helps organizers plan shared itineraries worldwide.',
+  title: aboutMeta.title,
+  description: aboutMeta.description,
   path: '/about',
 })
 

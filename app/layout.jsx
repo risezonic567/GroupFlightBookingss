@@ -1,19 +1,19 @@
-import { Manrope, Syne } from 'next/font/google'
+import { Archivo, Source_Sans_3 } from 'next/font/google'
 import Navbar from '@/components/Common/Navbar'
 import Footer from '@/components/Common/Footer'
 import SiteStructuredData from '@/components/seo/SiteStructuredData'
 import { BRAND, SITE_URL } from '@/lib/seo'
 import './globals.css'
 
-const manrope = Manrope({
+const archivo = Archivo({
   subsets: ['latin'],
-  variable: '--font-manrope',
+  variable: '--font-archivo',
   display: 'swap',
 })
 
-const syne = Syne({
+const sourceSans = Source_Sans_3({
   subsets: ['latin'],
-  variable: '--font-syne',
+  variable: '--font-source-sans',
   display: 'swap',
 })
 
@@ -37,13 +37,13 @@ export const metadata = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en" className={`${manrope.variable} ${syne.variable}`}>
+    <html lang="en" className={`${archivo.variable} ${sourceSans.variable}`}>
       <body
         suppressHydrationWarning
-        className="min-h-screen bg-[#f7fafc] font-sans antialiased"
-        style={{ fontFamily: 'var(--font-manrope), sans-serif' }}
+        className="min-h-screen bg-paper font-sans antialiased text-ink-900"
+        style={{ fontFamily: 'var(--font-source-sans), sans-serif' }}
       >
-        <style>{`.font-display{font-family:var(--font-syne),sans-serif}`}</style>
+        <style>{`.font-display{font-family:var(--font-archivo),sans-serif}`}</style>
         <SiteStructuredData />
         <Navbar />
         <main>{children}</main>

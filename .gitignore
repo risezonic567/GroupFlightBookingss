@@ -6,3 +6,11 @@ dist
 .env.local
 *.log
 .DS_Store
+
+# Agent skills (local only — frontend-design)
+.agents/skills/
+.agents/skills/**
+.cursor/skills/
+.claude/skills/
+skills/
+skills-lock.json

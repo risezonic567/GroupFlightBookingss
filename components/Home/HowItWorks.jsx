@@ -1,9 +1,25 @@
 'use client'
 
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { ensureGsapPlugins, revealOnScroll, safeRevert } from '@/lib/gsapSafe'
+
+const NODE_SIZE = 64
+const NODE_SIZE_MOBILE = 56
+const TEXT_BLOCK_H = 128
+const TEXT_NODE_GAP = 12
+const WAVE_VIEWBOX_W = 600
+const WAVE_VIEWBOX_H = 120
+/** Top-row node centre Y — must match SVG top + peak (y=0). */
+const TOP_NODE_CENTER_Y = TEXT_BLOCK_H + TEXT_NODE_GAP + NODE_SIZE / 2
+const WAVE_SVG_TOP = TOP_NODE_CENTER_Y
+const BOTTOM_NODE_CENTER_Y = TOP_NODE_CENTER_Y + WAVE_VIEWBOX_H
+const TOP_NODE_TOP = TOP_NODE_CENTER_Y - NODE_SIZE / 2
+const BOTTOM_NODE_TOP = BOTTOM_NODE_CENTER_Y - NODE_SIZE / 2
+const DESKTOP_HEIGHT = BOTTOM_NODE_TOP + NODE_SIZE + TEXT_NODE_GAP + TEXT_BLOCK_H + 24
+const WAVE_CTRL = 50
+const NAVY = '#00338D'
 
 const steps = [
   {
@@ -32,14 +48,33 @@ const steps = [
   },
 ]
 
-/** Visual grid order: 1-2, then 4-3, then 5-6 (zig-zag reading path). */
-const DESKTOP_SLOTS = [0, 1, 3, 2, 4, 5]
+const WAVE_POINTS = [
+  { x: 50, y: 0 },
+  { x: 150, y: 120 },
+  { x: 250, y: 0 },
+  { x: 350, y: 120 },
+  { x: 450, y: 0 },
+  { x: 550, y: 120 },
+]
 
-function StepIcon({ index }) {
+function buildWavePath(points) {
+  if (points.length < 2) return ''
+  let d = `M ${points[0].x} ${points[0].y}`
+  for (let i = 1; i < points.length; i += 1) {
+    const prev = points[i - 1]
+    const curr = points[i]
+    d += ` C ${prev.x + WAVE_CTRL} ${prev.y}, ${curr.x - WAVE_CTRL} ${curr.y}, ${curr.x} ${curr.y}`
+  }
+  return d
+}
+
+const WAVE_PATH_D = buildWavePath(WAVE_POINTS)
+
+function StepIcon({ index, active }) {
   const common = {
     fill: 'none',
-    stroke: '#ea580c',
-    strokeWidth: 1.8,
+    stroke: active ? '#c2410c' : '#ea580c',
+    strokeWidth: 1.85,
     strokeLinecap: 'round',
     strokeLinejoin: 'round',
   }
@@ -80,145 +115,102 @@ function StepIcon({ index }) {
   ]
 
   return (
-    <svg viewBox="0 0 28 28" className="h-9 w-9 sm:h-10 sm:w-10" aria-hidden="true">
+    <svg viewBox="0 0 28 28" className="h-8 w-8" aria-hidden="true">
       {icons[index]}
     </svg>
   )
 }
 
-/** Orthogonal elbows through icon centers only — never across text blocks. */
-function buildSmoothPath(points) {
-  if (points.length < 2) return ''
-  let d = `M ${points[0].x.toFixed(1)} ${points[0].y.toFixed(1)}`
-  for (let i = 1; i < points.length; i += 1) {
-    const prev = points[i - 1]
-    const curr = points[i]
-    const xChanged = Math.abs(prev.x - curr.x) > 6
-    const yChanged = Math.abs(prev.y - curr.y) > 6
-    if (xChanged && yChanged) {
-      // Prefer vertical-first on same-side drops (2→3, 4→5), horizontal-first on row crossings
-      const verticalFirst = Math.abs(prev.x - curr.x) < 120
-      if (verticalFirst) {
-        d += ` L ${prev.x.toFixed(1)} ${curr.y.toFixed(1)} L ${curr.x.toFixed(1)} ${curr.y.toFixed(1)}`
-      } else {
-        d += ` L ${curr.x.toFixed(1)} ${prev.y.toFixed(1)} L ${curr.x.toFixed(1)} ${curr.y.toFixed(1)}`
-      }
-    } else {
-      d += ` L ${curr.x.toFixed(1)} ${curr.y.toFixed(1)}`
-    }
+function nodeClasses(selected, passed, muted) {
+  if (selected) {
+    return 'scale-[1.06] border-ember-500 shadow-[0_0_0_6px_rgba(234,88,12,0.14),0_12px_28px_-10px_rgba(234,88,12,0.45)]'
   }
-  return d
+  if (passed) {
+    return 'border-[#00338D]/55'
+  }
+  return `border-ink-200 group-hover:scale-[1.03] group-hover:border-ember-400 ${muted ? 'opacity-90' : ''}`
 }
 
 export default function HowItWorks() {
   const sectionRef = useRef(null)
-  const desktopRef = useRef(null)
   const pathRef = useRef(null)
-  const pathBgRef = useRef(null)
-  const iconRefs = useRef([])
-  const hoverLock = useRef(false)
+  const activeRef = useRef(0)
   const [active, setActive] = useState(0)
-  const [pathD, setPathD] = useState('')
-  const [svgSize, setSvgSize] = useState({ w: 0, h: 0 })
-
-  function setIconRef(stepIndex, node) {
-    iconRefs.current[stepIndex] = node
-  }
-
-  function activate(index, fromHover = false) {
-    if (fromHover) hoverLock.current = true
-    setActive(index)
-  }
-
-  function releaseHover() {
-    hoverLock.current = false
-  }
-
-  const redrawPath = () => {
-    const root = desktopRef.current
-    if (!root) return
-    const rootBox = root.getBoundingClientRect()
-    // Journey order through icon centers: 1→2→3→4→5→6
-    const journey = [0, 1, 2, 3, 4, 5]
-    const points = journey
-      .map((stepIndex) => {
-        const el = iconRefs.current[stepIndex]
-        if (!el) return null
-        const box = el.getBoundingClientRect()
-        return {
-          x: box.left - rootBox.left + box.width / 2,
-          y: box.top - rootBox.top + box.height / 2,
-        }
-      })
-      .filter(Boolean)
-
-    if (points.length < 2) return
-    const next = buildSmoothPath(points)
-    setSvgSize((prev) =>
-      prev.w === rootBox.width && prev.h === rootBox.height ? prev : { w: rootBox.width, h: rootBox.height },
-    )
-    setPathD((prev) => (prev === next ? prev : next))
-  }
-
-  useLayoutEffect(() => {
-    redrawPath()
-    const root = desktopRef.current
-    if (!root || typeof ResizeObserver === 'undefined') return undefined
-    const ro = new ResizeObserver(() => redrawPath())
-    ro.observe(root)
-    window.addEventListener('resize', redrawPath)
-    return () => {
-      ro.disconnect()
-      window.removeEventListener('resize', redrawPath)
-    }
-  }, [])
+  const [progress, setProgress] = useState(0)
+  const [motionOff, setMotionOff] = useState(false)
 
   useEffect(() => {
     const section = sectionRef.current
-    const path = pathRef.current
-    const pathBg = pathBgRef.current
     if (!section) return undefined
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return undefined
+
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (reduceMotion) {
+      const path = pathRef.current
+      if (path) {
+        // pathLength="1" → dash units are normalized 0..1 (avoids getTotalLength mismatch)
+        path.style.strokeDasharray = '1 2'
+        path.style.strokeDashoffset = '0'
+      }
+      setMotionOff(true)
+      setActive(0)
+      setProgress(1)
+      return undefined
+    }
 
     ensureGsapPlugins()
+    const isDesktop = window.matchMedia('(min-width: 768px)').matches
     const desktopNodes = section.querySelectorAll('[data-steps-desktop] [data-step-node]')
     const mobileNodes = section.querySelectorAll('[data-steps-mobile] [data-step-node]')
-    const isDesktop = window.matchMedia('(min-width: 768px)').matches
     const visibleNodes = isDesktop ? desktopNodes : mobileNodes
+    const path = pathRef.current
 
     const ctx = gsap.context(() => {
       revealOnScroll(visibleNodes, {
         trigger: section,
-        vars: { y: 22, scale: 0.98, stagger: 0.08, start: 'top 85%' },
+        vars: { y: 22, stagger: 0.08, start: 'top 85%' },
       })
 
-      if (isDesktop && path && pathBg && pathD) {
-        const length = path.getTotalLength()
-        gsap.set([path, pathBg], {
-          strokeDasharray: length,
-          strokeDashoffset: length,
-        })
-        // Static guide (faint full route)
-        gsap.set(pathBg, { strokeDashoffset: 0, opacity: 0.35 })
+      if (isDesktop && path) {
+        // Root cause of "100% but stops at step 5":
+        // getTotalLength() is user-space, while non-scaling-stroke can make
+        // dasharray resolve in screen px — dash was shorter than the real stroke.
+        // pathLength="1" normalizes dash/offset to the full path (0 → 1).
+        path.style.strokeDasharray = '1 2'
+        path.style.strokeDashoffset = '1'
 
-        gsap.to(path, {
-          strokeDashoffset: 0,
-          ease: 'none',
-          scrollTrigger: {
-            trigger: section,
-            start: 'top 70%',
-            end: 'bottom 55%',
-            scrub: 0.85,
-            onUpdate: (self) => {
-              if (hoverLock.current) return
-              const idx = Math.min(steps.length - 1, Math.floor(self.progress * steps.length))
-              setActive(idx)
-            },
+        // Start only once the section is clearly on screen, then fill fast
+        // over a short scroll distance (avoids "already half-full on arrival").
+        ScrollTrigger.create({
+          trigger: section,
+          start: 'top 45%',
+          end: '+=420',
+          scrub: 0.25,
+          invalidateOnRefresh: true,
+          onUpdate: (self) => {
+            const p = self.progress
+            path.style.strokeDashoffset = String(1 - p)
+            setProgress(p)
+            const next = Math.min(5, Math.floor(p * 5 + 1e-6))
+            if (next !== activeRef.current) {
+              activeRef.current = next
+              setActive(next)
+            }
+          },
+          onLeave: () => {
+            path.style.strokeDashoffset = '0'
+            setProgress(1)
+            activeRef.current = 5
+            setActive(5)
+          },
+          onLeaveBack: () => {
+            path.style.strokeDashoffset = '1'
+            setProgress(0)
+            activeRef.current = 0
+            setActive(0)
           },
         })
       }
 
-      // Mobile: glow step when its card enters view
       if (!isDesktop) {
         mobileNodes.forEach((node, index) => {
           ScrollTrigger.create({
@@ -226,10 +218,12 @@ export default function HowItWorks() {
             start: 'top 60%',
             end: 'bottom 40%',
             onEnter: () => {
-              if (!hoverLock.current) setActive(index)
+              activeRef.current = index
+              setActive(index)
             },
             onEnterBack: () => {
-              if (!hoverLock.current) setActive(index)
+              activeRef.current = index
+              setActive(index)
             },
           })
         })
@@ -237,7 +231,6 @@ export default function HowItWorks() {
     }, section)
 
     const refreshId = window.setTimeout(() => {
-      redrawPath()
       ScrollTrigger.refresh()
     }, 120)
 
@@ -245,140 +238,175 @@ export default function HowItWorks() {
       window.clearTimeout(refreshId)
       safeRevert(ctx, visibleNodes)
     }
-  }, [pathD])
+  }, [])
 
   return (
-    <section ref={sectionRef} className="bg-white py-16 sm:py-20 lg:py-24">
-      <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
-        <h2 className="font-display text-3xl font-bold tracking-tight text-ink-900 sm:text-4xl">Next steps</h2>
-        <p className="mt-3 max-w-2xl text-base leading-7 text-ink-500">
-          Scroll to travel the path — numbers glow with progress. Hover any step anytime.
-        </p>
+    <section ref={sectionRef} className="relative overflow-x-hidden bg-white py-16 sm:py-20 lg:py-24">
+      <div
+        className="pointer-events-none absolute -left-24 top-24 h-64 w-64 rounded-full bg-ember-500/5 blur-3xl"
+        aria-hidden
+      />
+      <div
+        className="pointer-events-none absolute -right-20 bottom-10 h-72 w-72 rounded-full bg-[#00338D]/10 blur-3xl"
+        aria-hidden
+      />
+
+      <div className="relative mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-2xl text-center">
+          <h2 className="font-display text-3xl font-bold tracking-tight text-ink-900 sm:text-4xl">Next steps</h2>
+          <p className="mt-3 text-base leading-7 text-ink-500">
+            Scroll to travel the path — each step lights up as you go.
+          </p>
+          <p className="mt-4 text-sm font-semibold tabular-nums text-ink-400">
+            Step <span className="text-ember-600">{active + 1}</span> / {steps.length}
+            <span className="ml-3 text-ink-300">{Math.round(progress * 100)}%</span>
+          </p>
+        </div>
 
         {/* Mobile */}
         <ol data-steps-mobile className="relative mt-12 space-y-8 md:hidden">
-          <span className="absolute bottom-3 left-[27px] top-3 w-px border-l border-dashed border-ink-200" aria-hidden="true" />
+          <span
+            className="absolute bottom-3 left-[27px] top-3 w-px border-l border-dashed border-ink-200"
+            aria-hidden="true"
+          />
           {steps.map((step, index) => {
             const selected = active === index
+            const passed = motionOff ? index !== active : index < active
             return (
               <li key={step.title}>
-                <button
-                  type="button"
+                <div
                   data-step-node
-                  onClick={() => activate(index, true)}
-                  className="relative flex w-full items-start gap-4 text-left"
+                  role="presentation"
+                  onClick={() => {
+                    activeRef.current = index
+                    setActive(index)
+                  }}
+                  className="group relative flex w-full cursor-pointer items-start gap-4 text-left"
                 >
                   <span
-                    className={`relative z-10 flex h-14 w-14 shrink-0 items-center justify-center rounded-full border bg-white transition duration-300 ${
-                      selected
-                        ? 'border-ember-500 shadow-[0_0_0_6px_rgba(234,88,12,0.12),0_12px_28px_-10px_rgba(234,88,12,0.45)]'
-                        : 'border-ink-200'
-                    }`}
+                    className={`relative z-10 flex shrink-0 items-center justify-center rounded-full border-2 bg-white transition duration-300 ${nodeClasses(
+                      selected,
+                      passed,
+                      !selected && !passed,
+                    )}`}
+                    style={{ width: NODE_SIZE_MOBILE, height: NODE_SIZE_MOBILE }}
                   >
-                    <StepIcon index={index} />
+                    {selected && (
+                      <span
+                        className="pointer-events-none absolute inset-0 rounded-full bg-[radial-gradient(circle,rgba(234,88,12,0.14),transparent_68%)]"
+                        aria-hidden
+                      />
+                    )}
+                    <StepIcon index={index} active={selected} />
                   </span>
                   <span className="min-w-0 pt-1">
-                    <span className="block text-base font-bold text-ink-900">
-                      <span className={`transition ${selected ? 'text-ember-600 drop-shadow-[0_0_8px_rgba(234,88,12,0.55)]' : 'text-ember-600'}`}>
-                        {index + 1}.
-                      </span>{' '}
-                      {step.title}
+                    <span className="block font-display text-base font-bold text-ink-900">
+                      <span className="text-ember-600">{index + 1}.</span> {step.title}
                       {index < 5 ? ':' : ''}
                     </span>
                     <span className="mt-1 block text-sm leading-6 text-ink-500">{step.copy}</span>
                   </span>
-                </button>
+                </div>
               </li>
             )
           })}
         </ol>
 
-        {/* Desktop — icons face the center so the path never crosses copy */}
+        {/* Desktop wave */}
         <div
-          ref={desktopRef}
           data-steps-desktop
-          className="relative mt-16 hidden md:block"
-          onMouseLeave={releaseHover}
+          className="relative mx-auto mt-16 hidden w-full md:block"
+          style={{ height: DESKTOP_HEIGHT, maxWidth: '72rem' }}
         >
-          {pathD && svgSize.w > 0 && (
-            <svg
-              className="pointer-events-none absolute inset-0 z-0"
-              width={svgSize.w}
-              height={svgSize.h}
-              viewBox={`0 0 ${svgSize.w} ${svgSize.h}`}
-              aria-hidden="true"
-            >
-              <path
-                ref={pathBgRef}
-                d={pathD}
-                fill="none"
-                stroke="#d7e3f0"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              <path
-                ref={pathRef}
-                d={pathD}
-                fill="none"
-                stroke="#7dd3fc"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          )}
+          <svg
+            className="pointer-events-none absolute left-0 z-0 w-full overflow-visible"
+            style={{ top: WAVE_SVG_TOP, height: WAVE_VIEWBOX_H }}
+            viewBox={`0 0 ${WAVE_VIEWBOX_W} ${WAVE_VIEWBOX_H}`}
+            preserveAspectRatio="none"
+            aria-hidden="true"
+          >
+            <path
+              d={WAVE_PATH_D}
+              fill="none"
+              stroke="#c5d0e0"
+              strokeWidth="3"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              vectorEffect="non-scaling-stroke"
+            />
+            <path
+              ref={pathRef}
+              d={WAVE_PATH_D}
+              fill="none"
+              stroke={NAVY}
+              strokeWidth="3"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              pathLength="1"
+            />
+          </svg>
 
-          <div className="relative z-10 grid grid-cols-2 gap-x-16 gap-y-20 lg:gap-x-24 lg:gap-y-24">
-            {DESKTOP_SLOTS.map((stepIndex, slot) => {
-              const step = steps[stepIndex]
-              const selected = active === stepIndex
-              const isRightCol = slot % 2 === 1
-              // Icons toward center: left col = icon on right, right col = icon on left
-              const iconTowardCenter = isRightCol ? 'flex-row' : 'flex-row-reverse'
-              const textAlign = isRightCol ? 'text-left' : 'text-right'
-              const justify = isRightCol ? 'justify-self-start' : 'justify-self-end'
+          <ol className="relative z-10 m-0 h-full w-full list-none p-0">
+            {steps.map((step, index) => {
+              const selected = active === index
+              const passed = motionOff ? index !== active : index < active
+              const isTop = index % 2 === 0
+              const leftPct = ((index + 0.5) / steps.length) * 100
+              const nodeTop = isTop ? TOP_NODE_TOP : BOTTOM_NODE_TOP
 
               return (
-                <button
+                <li
                   key={step.title}
-                  type="button"
-                  data-step-node
-                  onMouseEnter={() => activate(stepIndex, true)}
-                  onFocus={() => activate(stepIndex, true)}
-                  onClick={() => activate(stepIndex, true)}
-                  className={`group flex max-w-[340px] items-start gap-4 lg:max-w-[380px] lg:gap-5 ${iconTowardCenter} ${justify}`}
+                  className="absolute block h-full w-[16%] min-w-[150px]"
+                  style={{
+                    left: `${leftPct}%`,
+                    top: 0,
+                    transform: 'translateX(-50%)',
+                  }}
                 >
-                  <span
-                    ref={(node) => setIconRef(stepIndex, node)}
-                    className={`relative z-10 flex h-[88px] w-[88px] shrink-0 items-center justify-center rounded-full border bg-white transition duration-300 lg:h-[96px] lg:w-[96px] ${
-                      selected
-                        ? 'border-ember-500 shadow-[0_0_0_8px_rgba(234,88,12,0.12),0_16px_36px_-12px_rgba(234,88,12,0.5)] scale-[1.05]'
-                        : 'border-ink-200 group-hover:border-ember-400'
-                    }`}
-                  >
-                    <StepIcon index={stepIndex} />
-                  </span>
-                  <span className={`min-w-0 pt-2 ${textAlign}`}>
-                    <span className="block text-lg font-bold leading-snug text-ink-900 lg:text-xl">
-                      <span
-                        className={`inline-block transition duration-300 ${
-                          selected
-                            ? 'text-ember-600 drop-shadow-[0_0_10px_rgba(234,88,12,0.65)]'
-                            : 'text-ember-600'
-                        }`}
-                      >
-                        {stepIndex + 1}.
-                      </span>{' '}
-                      {step.title}
-                      {stepIndex < 5 ? ':' : ''}
+                  <div data-step-node className="group relative h-full w-full">
+                    {/* Fixed node Y so centres sit on the wave peaks/valleys */}
+                    <span
+                      className={`absolute left-1/2 z-10 flex -translate-x-1/2 items-center justify-center rounded-full border-2 bg-white transition duration-300 ${nodeClasses(
+                        selected,
+                        passed,
+                        !selected && !passed,
+                      )}`}
+                      style={{ top: nodeTop, width: NODE_SIZE, height: NODE_SIZE }}
+                    >
+                      {selected && (
+                        <span
+                          className="pointer-events-none absolute inset-0 rounded-full bg-[radial-gradient(circle,rgba(234,88,12,0.14),transparent_68%)]"
+                          aria-hidden
+                        />
+                      )}
+                      <StepIcon index={index} active={selected} />
                     </span>
-                    <span className="mt-2 block text-sm leading-6 text-ink-500 lg:text-[15px]">{step.copy}</span>
-                  </span>
-                </button>
+
+                    <span
+                      className={`absolute left-0 right-0 flex flex-col text-center ${
+                        isTop ? 'justify-end' : 'justify-start'
+                      }`}
+                      style={
+                        isTop
+                          ? { top: 0, height: TEXT_BLOCK_H }
+                          : {
+                              top: BOTTOM_NODE_TOP + NODE_SIZE + TEXT_NODE_GAP,
+                              height: TEXT_BLOCK_H,
+                            }
+                      }
+                    >
+                      <span className="font-display text-base font-bold text-ink-900">
+                        <span className="text-ember-600">{index + 1}.</span> {step.title}
+                        {index < 5 ? ':' : ''}
+                      </span>
+                      <span className="mt-1 line-clamp-3 text-sm leading-6 text-ink-500">{step.copy}</span>
+                    </span>
+                  </div>
+                </li>
               )
             })}
-          </div>
+          </ol>
         </div>
       </div>
     </section>
